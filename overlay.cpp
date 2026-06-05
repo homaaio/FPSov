@@ -464,6 +464,28 @@ static bool  g_dragging = false;
 #define IDM_BL       1004
 #define IDM_BR       1005
 
+static void CheckForUpdates() {
+    std::ifstream versionFile("version.txt");
+    if (!versionFile.is_open()) return;
+    
+    std::string currentVersion;
+    std::getline(versionFile, currentVersion);
+    versionFile.close();
+    
+    // Проверяем update.bat
+    if (GetAsyncKeyState(VK_F5) & 1) { // F5 для проверки
+        system("start check_update.bat");
+    }
+    
+    // Или проверяем при запуске (раз в день)
+    static time_t lastCheck = 0;
+    time_t now = time(nullptr);
+    if (now - lastCheck > 86400) { // раз в сутки
+        lastCheck = now;
+        system("start /min update.bat");
+    }
+}
+
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_PAINT:
