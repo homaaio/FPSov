@@ -24,21 +24,6 @@ Lightweight system monitoring overlay for games and applications on Windows. Dis
 - GPU with DXGI support (DirectX 11/12)
 
 ## Installation
-
-### Method 1: Pre-built Binaries (Recommended)
-1. Download the latest release from the [Releases](../../releases) section
+1. Download the latest release from the Releases section
 2. Extract the archive to a folder of your choice
 3. Run `overlay.exe`
-
-### Method 2: Build from Source
-
-#### Prerequisites
-- MSVC (Visual Studio 2022) or MinGW-w64 (GCC)
-- Python 3.7+ (for settings utility)
-- Windows SDK
-
-#### Compilation
-
-Using MSVC (Developer Command Prompt):
-```cmd
-cl /O2 /EHsc overlay.cpp /Fe:overlay.exe user32.lib gdi32.lib pdh.lib psapi.lib dwmapi.lib
