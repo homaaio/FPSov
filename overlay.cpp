@@ -204,7 +204,7 @@ static void MoveToCorner(HWND hwnd, Corner c) {
     SetWindowPos(hwnd, HWND_TOPMOST, x, y, WIN_W, WIN_H, SWP_NOSIZE);
 }
 
-// ─── SHARED DATA ──────────────────────────────────────────────────────────
+// SHARED DATA
 static std::atomic<float>  g_cpu_pct   {0};
 static std::atomic<float>  g_gpu_pct   {0};
 static std::atomic<int>    g_fps       {0};
@@ -232,9 +232,7 @@ static float ReadCPU() {
     return 0;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
 // GPU VIA PDH
-// ═══════════════════════════════════════════════════════════════════════════
 static PDH_HQUERY   hGpuQuery  = nullptr;
 static PDH_HCOUNTER hGpuCtr    = nullptr;
 
@@ -261,9 +259,8 @@ static float ReadGPU() {
     return 0;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
 // FPS FROM ACTIVE GAME
-// ═══════════════════════════════════════════════════════════════════════════
+
 static HWND GetForegroundGameWindow() {
     HWND hwnd = GetForegroundWindow();
     if (!hwnd) return nullptr;
@@ -327,9 +324,8 @@ static int GetGameFPS() {
     return last_fps;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
 // BACKGROUND COLLECTOR THREAD
-// ═══════════════════════════════════════════════════════════════════════════
+
 static void CollectorThread() {
     InitCPU();
     InitGPU();
@@ -452,9 +448,8 @@ static void Paint(HWND hwnd) {
     EndPaint(hwnd, &ps);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
 // WINDOW PROCEDURE
-// ═══════════════════════════════════════════════════════════════════════════
+
 static POINT g_drag_start;
 static bool  g_dragging = false;
 
@@ -472,8 +467,7 @@ static void CheckForUpdates() {
     std::getline(versionFile, currentVersion);
     versionFile.close();
     
-    // Проверяем update.bat
-    if (GetAsyncKeyState(VK_F5) & 1) { // F5 для проверки
+    if (GetAsyncKeyState(VK_F5) & 1) { 
         system("start check_update.bat");
     }
     
@@ -563,9 +557,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     return DefWindowProcA(hwnd, msg, wp, lp);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
 // WINMAIN
-// ═══════════════════════════════════════════════════════════════════════════
+
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int) {
     SaveDefaultConfig();
     LoadConfig();
