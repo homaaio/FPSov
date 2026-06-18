@@ -10,6 +10,7 @@
 #include <psapi.h>
 #include <pdh.h>
 #include <dwmapi.h>
+#include <shellapi.h>  // Добавлено для ShellExecuteA
 #include <fstream>
 #include <string>
 #include <atomic>
@@ -19,11 +20,14 @@
 #include <algorithm>
 #include <sstream>
 #include <iomanip>
+#include <cstring>
+#include <ctime>
 
 #pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "pdh.lib")
 #pragma comment(lib, "psapi.lib")
 #pragma comment(lib, "dwmapi.lib")
+#pragma comment(lib, "shell32.lib")  // Добавлено для ShellExecuteA
 
 // ─── CONFIGURATION STRUCTURE ──────────────────────────────────────────────
 struct Config {
@@ -334,7 +338,12 @@ static void CollectorThread() {
         if (SHOW_CPU) g_cpu_pct = ReadCPU();
         if (SHOW_GPU) g_gpu_pct = ReadGPU();
         if (SHOW_FPS) g_fps = GetGameFPS();
-        std::this_thread::sleep_for(std::chrono::milliseconds(UPDATE_MS));
+        
+        // Sleep in small increments to respond quickly to exit signal
+        const int step = 50;
+        for (int i = 0; i < UPDATE_MS / step && g_running; i++) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(step));
+        }
     }
     
     if (hCpuQuery) PdhCloseQuery(hCpuQuery);
@@ -459,7 +468,9 @@ static bool  g_dragging = false;
 #define IDM_BL       1004
 #define IDM_BR       1005
 
-static void CheckForUpdates() {
+// Check for updates - now uses ShellExecuteA instead of system()
+static void CheckForUpdates(HWND hwnd) {
+    // Check if version.txt exists
     std::ifstream versionFile("version.txt");
     if (!versionFile.is_open()) return;
     
@@ -467,21 +478,27 @@ static void CheckForUpdates() {
     std::getline(versionFile, currentVersion);
     versionFile.close();
     
+    // F5 key press check
     if (GetAsyncKeyState(VK_F5) & 1) { 
-        system("start check_update.bat");
+        ShellExecuteA(hwnd, "open", "check_update.bat", nullptr, nullptr, SW_HIDE);
     }
     
-    // Или проверяем при запуске (раз в день)
+    // Check once per day
     static time_t lastCheck = 0;
     time_t now = time(nullptr);
-    if (now - lastCheck > 86400) { // раз в сутки
+    if (now - lastCheck > 86400) { // once per day
         lastCheck = now;
-        system("start /min update.bat");
+        ShellExecuteA(hwnd, "open", "update.bat", nullptr, nullptr, SW_HIDE);
     }
 }
 
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
+    case WM_CREATE:
+        // Start update check on window creation
+        CheckForUpdates(hwnd);
+        return 0;
+        
     case WM_PAINT:
         Paint(hwnd);
         return 0;
