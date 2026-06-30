@@ -28,6 +28,9 @@
 *.mod
 *.smod
 
+# Cache
+*.pyc
+
 # Compiled Static libraries
 *.lai
 *.la
