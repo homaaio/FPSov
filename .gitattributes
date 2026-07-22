@@ -1,0 +1,26 @@
+* text=auto
+
+*.cpp text eol=lf diff=cpp
+*.hpp text eol=lf diff=cpp
+*.h   text eol=lf diff=cpp
+
+*.py text eol=lf diff=python
+
+*.sh text eol=lf
+*.bat text eol=crlf
+
+*.hrc text eol=lf
+*.ini text eol=lf
+*.cfg text eol=lf
+Makefile text eol=lf
+
+*.md text eol=lf diff=markdown
+
+*.png binary
+*.ico binary
+*.exe binary
+*.dll binary
+*.so binary
+
+*.zip binary -diff
+*.tar.gz binary -diff
