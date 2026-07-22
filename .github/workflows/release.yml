@@ -1,0 +1,126 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Запускать при тегах v1.0.0, v2.0.0 и т.д.
+
+jobs:
+  # Сборка для Windows
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup MinGW
+      uses: egor-tensin/setup-mingw@v2
+      with:
+        platform: x64
+    
+    - name: Compile Windows
+      run: |
+        mkdir build\windows
+        g++ -std=c++17 -O2 -static `
+          src/windows/overlay.cpp `
+          -o build/windows/fps-overlay.exe `
+          -lgdi32 -lpdh -lpsapi -ldwmapi -lshell32 `
+          -mwindows
+        
+        g++ -std=c++17 -O2 -shared -static `
+          src/windows/settings_core.cpp `
+          -o build/windows/settings_core.dll
+        
+        copy src\windows\settings.py build\windows\
+    
+    - name: Create Windows archive
+      run: |
+        Compress-Archive `
+          -Path build\windows\* `
+          -DestinationPath FPS-Overlay-Windows.zip
+    
+    - name: Upload Windows artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: FPS-Overlay-Windows
+        path: FPS-Overlay-Windows.zip
+
+  # Сборка для Linux
+  build-linux:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libx11-dev libxext-dev python3
+    
+    - name: Compile Linux
+      run: |
+        mkdir -p build/linux
+        
+        g++ -std=c++17 -O2 -static \
+          src/linux/overlay.cpp \
+          -o build/linux/fps-overlay \
+          -lX11 -lXext -pthread
+        
+        g++ -std=c++17 -O2 -shared -fPIC \
+          src/linux/settings_core.cpp \
+          -o build/linux/libsettings_core.so
+        
+        cp src/linux/settings.py build/linux/fps-overlay-settings
+        chmod +x build/linux/fps-overlay-settings
+        cp src/linux/Makefile build/linux/
+    
+    - name: Create Linux archive
+      run: |
+        tar -czf FPS-Overlay-Linux.tar.gz -C build/linux .
+    
+    - name: Upload Linux artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: FPS-Overlay-Linux
+        path: FPS-Overlay-Linux.tar.gz
+
+  # Создание релиза
+  create-release:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Download Windows artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: FPS-Overlay-Windows
+    
+    - name: Download Linux artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: FPS-Overlay-Linux
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        name: Release ${{ github.ref_name }}
+        body: |
+          ## FPS Overlay ${{ github.ref_name }}
+          
+          ### Windows
+          - `FPS-Overlay-Windows.zip` — распаковать и запустить `fps-overlay.exe`
+          
+          ### Linux
+          - `FPS-Overlay-Linux.tar.gz` — распаковать, запустить `./fps-overlay`
+          
+          ### Изменения
+          - Системный оверлей для мониторинга FPS/CPU/GPU
+          - Поддержка перетаскивания
+          - Настройка через GUI (Python) или INI файл
+        files: |
+          FPS-Overlay-Windows.zip
+          FPS-Overlay-Linux.tar.gz
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
