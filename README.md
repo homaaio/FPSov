@@ -1,4 +1,4 @@
-# FPSov - System Overlay for Windows
+# FPSov - System Overlay for Windows/Linux
 
 Lightweight system monitoring overlay for games and applications on Windows. Displays FPS, CPU and GPU usage in a transparent window above all other programs.
 
