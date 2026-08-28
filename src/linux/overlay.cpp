@@ -7,6 +7,7 @@
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
 #include <X11/extensions/shape.h>
+#include <X11/keysym.h>
 
 #include <fstream>
 #include <string>
@@ -37,7 +38,7 @@ struct Config {
     int fps_warn_r = 255, fps_warn_g = 170, fps_warn_b = 0;
     int fps_crit_r = 255, fps_crit_g = 50, fps_crit_b = 70;
     int text_dim_r = 60, text_dim_g = 100, text_dim_b = 75;
-    int sep_r = 40, sep_g = 70, sep_b = 50;s
+    int sep_r = 40, sep_g = 70, sep_b = 50;
     
     bool show_fps = true;
     bool show_cpu = true;
