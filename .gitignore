@@ -70,3 +70,8 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# FPSov trash files
+
+*.zip
+*.ini
