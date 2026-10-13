@@ -10,7 +10,6 @@
 #include <psapi.h>
 #include <pdh.h>
 #include <dwmapi.h>
-#include <shellapi.h>  // Добавлено для ShellExecuteA
 #include <fstream>
 #include <string>
 #include <atomic>
@@ -27,9 +26,8 @@
 #pragma comment(lib, "pdh.lib")
 #pragma comment(lib, "psapi.lib")
 #pragma comment(lib, "dwmapi.lib")
-#pragma comment(lib, "shell32.lib")  // Добавлено для ShellExecuteA
 
-// ─── CONFIGURATION STRUCTURE ──────────────────────────────────────────────
+// CONFIGURATION STRUCTURE ----------------------------------------------
 struct Config {
     // Window settings
     int width = 200;
@@ -69,7 +67,7 @@ static bool SHOW_FPS, SHOW_CPU, SHOW_GPU, SHOW_TITLE;
 static int FONT_FPS, FONT_VAL, FONT_SMALL;
 static std::string CORNER;
 
-// ─── CONFIG FILE PARSER ───────────────────────────────────────────────────
+// CONFIG FILE PARSER 
 static void LoadConfig() {
     std::ifstream file("overlay.ini");
     if (file.is_open()) {
@@ -90,38 +88,48 @@ static void LoadConfig() {
             val.erase(0, val.find_first_not_of(" \t\r\n"));
             val.erase(val.find_last_not_of(" \t\r\n") + 1);
             
-            // Window settings
-            if (key == "width") g_config.width = std::stoi(val);
-            else if (key == "height") g_config.height = std::stoi(val);
-            else if (key == "alpha") g_config.alpha = std::stof(val);
-            else if (key == "margin") g_config.margin = std::stoi(val);
-            else if (key == "corner") g_config.corner = val;
-            
-            // Color settings
-            else if (key == "background") sscanf(val.c_str(), "%d,%d,%d", &g_config.bg_r, &g_config.bg_g, &g_config.bg_b);
-            else if (key == "fps_ok") sscanf(val.c_str(), "%d,%d,%d", &g_config.fps_ok_r, &g_config.fps_ok_g, &g_config.fps_ok_b);
-            else if (key == "fps_warn") sscanf(val.c_str(), "%d,%d,%d", &g_config.fps_warn_r, &g_config.fps_warn_g, &g_config.fps_warn_b);
-            else if (key == "fps_crit") sscanf(val.c_str(), "%d,%d,%d", &g_config.fps_crit_r, &g_config.fps_crit_g, &g_config.fps_crit_b);
-            else if (key == "text_dim") sscanf(val.c_str(), "%d,%d,%d", &g_config.text_dim_r, &g_config.text_dim_g, &g_config.text_dim_b);
-            else if (key == "separator") sscanf(val.c_str(), "%d,%d,%d", &g_config.sep_r, &g_config.sep_g, &g_config.sep_b);
-            
-            // Display settings
-            else if (key == "show_fps") g_config.show_fps = (val == "true" || val == "1");
-            else if (key == "show_cpu") g_config.show_cpu = (val == "true" || val == "1");
-            else if (key == "show_gpu") g_config.show_gpu = (val == "true" || val == "1");
-            else if (key == "show_title") g_config.show_title = (val == "true" || val == "1");
-            else if (key == "font_fps") g_config.font_fps = std::stoi(val);
-            else if (key == "font_val") g_config.font_val = std::stoi(val);
-            else if (key == "font_small") g_config.font_small = std::stoi(val);
-            
-            // Update settings
-            else if (key == "update_metrics") g_config.update_metrics = std::stoi(val);
-            else if (key == "update_overlay") g_config.update_overlay = std::stoi(val);
+            try {
+                // Window settings
+                if (key == "width") g_config.width = std::stoi(val);
+                else if (key == "height") g_config.height = std::stoi(val);
+                else if (key == "alpha") g_config.alpha = std::stof(val);
+                else if (key == "margin") g_config.margin = std::stoi(val);
+                else if (key == "corner") g_config.corner = val;
+
+                // Color settings
+                else if (key == "background") sscanf(val.c_str(), "%d,%d,%d", &g_config.bg_r, &g_config.bg_g, &g_config.bg_b);
+                else if (key == "fps_ok") sscanf(val.c_str(), "%d,%d,%d", &g_config.fps_ok_r, &g_config.fps_ok_g, &g_config.fps_ok_b);
+                else if (key == "fps_warn") sscanf(val.c_str(), "%d,%d,%d", &g_config.fps_warn_r, &g_config.fps_warn_g, &g_config.fps_warn_b);
+                else if (key == "fps_crit") sscanf(val.c_str(), "%d,%d,%d", &g_config.fps_crit_r, &g_config.fps_crit_g, &g_config.fps_crit_b);
+                else if (key == "text_dim") sscanf(val.c_str(), "%d,%d,%d", &g_config.text_dim_r, &g_config.text_dim_g, &g_config.text_dim_b);
+                else if (key == "separator") sscanf(val.c_str(), "%d,%d,%d", &g_config.sep_r, &g_config.sep_g, &g_config.sep_b);
+
+                // Display settings
+                else if (key == "show_fps") g_config.show_fps = (val == "true" || val == "1");
+                else if (key == "show_cpu") g_config.show_cpu = (val == "true" || val == "1");
+                else if (key == "show_gpu") g_config.show_gpu = (val == "true" || val == "1");
+                else if (key == "show_title") g_config.show_title = (val == "true" || val == "1");
+                else if (key == "font_fps") g_config.font_fps = std::stoi(val);
+                else if (key == "font_val") g_config.font_val = std::stoi(val);
+                else if (key == "font_small") g_config.font_small = std::stoi(val);
+
+                // Update settings
+                else if (key == "update_metrics") g_config.update_metrics = std::stoi(val);
+                else if (key == "update_overlay") g_config.update_overlay = std::stoi(val);
+            } catch (...) {
+                // Malformed line in overlay.ini - skip it and keep the current/default value
+                continue;
+            }
         }
         file.close();
     }
     
-    // Apply config to global variables
+    // Apply config to global variables (clamp to sane ranges so a bad
+    // overlay.ini can't produce a degenerate/invisible window)
+    g_config.width = std::max(100, std::min(g_config.width, 2000));
+    g_config.height = std::max(60, std::min(g_config.height, 2000));
+    g_config.alpha = std::max(0.05f, std::min(g_config.alpha, 1.0f));
+
     WIN_W = g_config.width;
     WIN_H = g_config.height;
     ALPHA_F = g_config.alpha;
@@ -190,7 +198,7 @@ static void SaveDefaultConfig() {
     file.close();
 }
 
-// ─── WINDOW POSITION ──────────────────────────────────────────────────────
+// WINDOW POSITION ---
 enum Corner { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT };
 static Corner g_corner = TOP_RIGHT;
 
@@ -468,37 +476,8 @@ static bool  g_dragging = false;
 #define IDM_BL       1004
 #define IDM_BR       1005
 
-// Check for updates - now uses ShellExecuteA instead of system()
-static void CheckForUpdates(HWND hwnd) {
-    // Check if version.txt exists
-    std::ifstream versionFile("version.txt");
-    if (!versionFile.is_open()) return;
-    
-    std::string currentVersion;
-    std::getline(versionFile, currentVersion);
-    versionFile.close();
-    
-    // F5 key press check
-    if (GetAsyncKeyState(VK_F5) & 1) { 
-        ShellExecuteA(hwnd, "open", "check_update.bat", nullptr, nullptr, SW_HIDE);
-    }
-    
-    // Check once per day
-    static time_t lastCheck = 0;
-    time_t now = time(nullptr);
-    if (now - lastCheck > 86400) { // once per day
-        lastCheck = now;
-        ShellExecuteA(hwnd, "open", "update.bat", nullptr, nullptr, SW_HIDE);
-    }
-}
-
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
-    case WM_CREATE:
-        // Start update check on window creation
-        CheckForUpdates(hwnd);
-        return 0;
-        
     case WM_PAINT:
         Paint(hwnd);
         return 0;

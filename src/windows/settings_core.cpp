@@ -79,13 +79,25 @@ static void SetDefaultConfig() {
     g_config.update_overlay = 33;
 }
 
+// Safely copy a string into a fixed-size buffer, always NUL-terminating
+// and never overflowing the destination.
+static void SafeCopy(char* dst, size_t dstSize, const char* src) {
+    if (dstSize == 0) return;
+    strncpy(dst, src, dstSize - 1);
+    dst[dstSize - 1] = '\0';
+}
+
 // Parse RGB from string "r,g,b"
 static void ParseRGB(const std::string& str, int* r, int* g, int* b) {
     std::vector<int> rgb;
     std::stringstream ss(str);
     std::string item;
-    while (std::getline(ss, item, ',')) {
-        rgb.push_back(std::stoi(item));
+    try {
+        while (std::getline(ss, item, ',')) {
+            rgb.push_back(std::stoi(item));
+        }
+    } catch (...) {
+        return; // malformed value - leave r/g/b untouched
     }
     if (rgb.size() >= 3) {
         *r = rgb[0];
@@ -117,33 +129,38 @@ __declspec(dllexport) int LoadConfig() {
         val.erase(0, val.find_first_not_of(" \t\r\n"));
         val.erase(val.find_last_not_of(" \t\r\n") + 1);
         
-        // Window settings
-        if (key == "width") g_config.width = std::stoi(val);
-        else if (key == "height") g_config.height = std::stoi(val);
-        else if (key == "alpha") g_config.alpha = std::stof(val);
-        else if (key == "margin") g_config.margin = std::stoi(val);
-        else if (key == "corner") strcpy(g_config.corner, val.c_str());
-        
-        // Color settings
-        else if (key == "background") ParseRGB(val, &g_config.bg_r, &g_config.bg_g, &g_config.bg_b);
-        else if (key == "fps_ok") ParseRGB(val, &g_config.fps_ok_r, &g_config.fps_ok_g, &g_config.fps_ok_b);
-        else if (key == "fps_warn") ParseRGB(val, &g_config.fps_warn_r, &g_config.fps_warn_g, &g_config.fps_warn_b);
-        else if (key == "fps_crit") ParseRGB(val, &g_config.fps_crit_r, &g_config.fps_crit_g, &g_config.fps_crit_b);
-        else if (key == "text_dim") ParseRGB(val, &g_config.text_dim_r, &g_config.text_dim_g, &g_config.text_dim_b);
-        else if (key == "separator") ParseRGB(val, &g_config.sep_r, &g_config.sep_g, &g_config.sep_b);
-        
-        // Display settings
-        else if (key == "show_fps") g_config.show_fps = (val == "true" || val == "1") ? 1 : 0;
-        else if (key == "show_cpu") g_config.show_cpu = (val == "true" || val == "1") ? 1 : 0;
-        else if (key == "show_gpu") g_config.show_gpu = (val == "true" || val == "1") ? 1 : 0;
-        else if (key == "show_title") g_config.show_title = (val == "true" || val == "1") ? 1 : 0;
-        else if (key == "font_fps") g_config.font_fps = std::stoi(val);
-        else if (key == "font_val") g_config.font_val = std::stoi(val);
-        else if (key == "font_small") g_config.font_small = std::stoi(val);
-        
-        // Update settings
-        else if (key == "update_metrics") g_config.update_metrics = std::stoi(val);
-        else if (key == "update_overlay") g_config.update_overlay = std::stoi(val);
+        try {
+            // Window settings
+            if (key == "width") g_config.width = std::stoi(val);
+            else if (key == "height") g_config.height = std::stoi(val);
+            else if (key == "alpha") g_config.alpha = std::stof(val);
+            else if (key == "margin") g_config.margin = std::stoi(val);
+            else if (key == "corner") SafeCopy(g_config.corner, sizeof(g_config.corner), val.c_str());
+
+            // Color settings
+            else if (key == "background") ParseRGB(val, &g_config.bg_r, &g_config.bg_g, &g_config.bg_b);
+            else if (key == "fps_ok") ParseRGB(val, &g_config.fps_ok_r, &g_config.fps_ok_g, &g_config.fps_ok_b);
+            else if (key == "fps_warn") ParseRGB(val, &g_config.fps_warn_r, &g_config.fps_warn_g, &g_config.fps_warn_b);
+            else if (key == "fps_crit") ParseRGB(val, &g_config.fps_crit_r, &g_config.fps_crit_g, &g_config.fps_crit_b);
+            else if (key == "text_dim") ParseRGB(val, &g_config.text_dim_r, &g_config.text_dim_g, &g_config.text_dim_b);
+            else if (key == "separator") ParseRGB(val, &g_config.sep_r, &g_config.sep_g, &g_config.sep_b);
+
+            // Display settings
+            else if (key == "show_fps") g_config.show_fps = (val == "true" || val == "1") ? 1 : 0;
+            else if (key == "show_cpu") g_config.show_cpu = (val == "true" || val == "1") ? 1 : 0;
+            else if (key == "show_gpu") g_config.show_gpu = (val == "true" || val == "1") ? 1 : 0;
+            else if (key == "show_title") g_config.show_title = (val == "true" || val == "1") ? 1 : 0;
+            else if (key == "font_fps") g_config.font_fps = std::stoi(val);
+            else if (key == "font_val") g_config.font_val = std::stoi(val);
+            else if (key == "font_small") g_config.font_small = std::stoi(val);
+
+            // Update settings
+            else if (key == "update_metrics") g_config.update_metrics = std::stoi(val);
+            else if (key == "update_overlay") g_config.update_overlay = std::stoi(val);
+        } catch (...) {
+            // Malformed line in overlay.ini - skip it and keep the current/default value
+            continue;
+        }
     }
     
     file.close();
@@ -232,7 +249,7 @@ __declspec(dllexport) void SetWidth(int val) { g_config.width = val; }
 __declspec(dllexport) void SetHeight(int val) { g_config.height = val; }
 __declspec(dllexport) void SetAlpha(float val) { g_config.alpha = val; }
 __declspec(dllexport) void SetMargin(int val) { g_config.margin = val; }
-__declspec(dllexport) void SetCorner(const char* val) { strcpy(g_config.corner, val); }
+__declspec(dllexport) void SetCorner(const char* val) { SafeCopy(g_config.corner, sizeof(g_config.corner), val); }
 
 __declspec(dllexport) void SetBackground(int r, int g, int b) {
     g_config.bg_r = r; g_config.bg_g = g; g_config.bg_b = b;
@@ -283,7 +300,7 @@ __declspec(dllexport) int ValidateConfig() {
 // Get config as JSON string (for Python)
 __declspec(dllexport) char* GetConfigJSON() {
     static char json[2048];
-    sprintf(json, "{"
+    snprintf(json, sizeof(json), "{"
             "\"width\":%d,"
             "\"height\":%d,"
             "\"alpha\":%f,"

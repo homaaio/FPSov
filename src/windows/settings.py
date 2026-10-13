@@ -19,7 +19,9 @@ DEFAULT_CONFIG = {
 }
 
 COLOR_KEYS = [
-    ("Background", "bg", "bg_r", "bg_g", "bg_b"),
+    # (label, ini_key, r_field, g_field, b_field)
+    # ini_key must exactly match the key names read by overlay.cpp / settings_core.cpp
+    ("Background", "background", "bg_r", "bg_g", "bg_b"),
     ("FPS OK (≥70%)", "fps_ok", "fps_ok_r", "fps_ok_g", "fps_ok_b"),
     ("FPS Warning (45-70%)", "fps_warn", "fps_warn_r", "fps_warn_g", "fps_warn_b"),
     ("FPS Critical (<45%)", "fps_crit", "fps_crit_r", "fps_crit_g", "fps_crit_b"),
@@ -57,42 +59,50 @@ class OverlaySettings:
                 key, val = line.split('=', 1)
                 key, val = key.strip(), val.strip()
                 
-                if key in self.config:
-                    if isinstance(self.config[key], bool):
-                        self.config[key] = val.lower() in ('true', '1')
-                    elif isinstance(self.config[key], int):
-                        self.config[key] = int(val)
-                    elif isinstance(self.config[key], float):
-                        self.config[key] = float(val)
-                    else:
-                        self.config[key] = val
-                
-                # Parse RGB tuples
-                for _, _, rk, gk, bk in COLOR_KEYS:
-                    if key == rk[:-2]:
-                        parts = val.split(',')
-                        if len(parts) == 3:
-                            self.config[rk], self.config[gk], self.config[bk] = map(int, parts)
-                        break
+                try:
+                    if key in self.config:
+                        if isinstance(self.config[key], bool):
+                            self.config[key] = val.lower() in ('true', '1')
+                        elif isinstance(self.config[key], int):
+                            self.config[key] = int(val)
+                        elif isinstance(self.config[key], float):
+                            self.config[key] = float(val)
+                        else:
+                            self.config[key] = val
+
+                    # Parse RGB tuples (ini_key must match what overlay.cpp writes/reads)
+                    for _, ini_key, rk, gk, bk in COLOR_KEYS:
+                        if key == ini_key:
+                            parts = val.split(',')
+                            if len(parts) == 3:
+                                self.config[rk], self.config[gk], self.config[bk] = map(int, parts)
+                            break
+                except ValueError:
+                    # Malformed line in overlay.ini - skip it and keep the current/default value
+                    continue
     
     def save_config(self):
-        with open(CONFIG_FILE, 'w') as f:
-            f.write("; Overlay Configuration File\n\n[Window]\n")
-            f.write(f"width={self.config['width']}\nheight={self.config['height']}\n")
-            f.write(f"alpha={self.config['alpha']}\nmargin={self.config['margin']}\n")
-            f.write(f"corner={self.config['corner']}\n\n[Colors]\n")
-            
-            for label, key, rk, gk, bk in COLOR_KEYS:
-                f.write(f"{key}={self.config[rk]},{self.config[gk]},{self.config[bk]}\n")
-            
-            f.write("\n[Display]\n")
-            for k in ('show_fps', 'show_cpu', 'show_gpu', 'show_title'):
-                f.write(f"{k}={'true' if self.config[k] else 'false'}\n")
-            f.write(f"font_fps={self.config['font_fps']}\nfont_val={self.config['font_val']}\n")
-            f.write(f"font_small={self.config['font_small']}\n\n[Update]\n")
-            f.write(f"update_metrics={self.config['update_metrics']}\n")
-            f.write(f"update_overlay={self.config['update_overlay']}\n")
-        
+        try:
+            with open(CONFIG_FILE, 'w') as f:
+                f.write("; Overlay Configuration File\n\n[Window]\n")
+                f.write(f"width={self.config['width']}\nheight={self.config['height']}\n")
+                f.write(f"alpha={self.config['alpha']}\nmargin={self.config['margin']}\n")
+                f.write(f"corner={self.config['corner']}\n\n[Colors]\n")
+
+                for label, key, rk, gk, bk in COLOR_KEYS:
+                    f.write(f"{key}={self.config[rk]},{self.config[gk]},{self.config[bk]}\n")
+
+                f.write("\n[Display]\n")
+                for k in ('show_fps', 'show_cpu', 'show_gpu', 'show_title'):
+                    f.write(f"{k}={'true' if self.config[k] else 'false'}\n")
+                f.write(f"font_fps={self.config['font_fps']}\nfont_val={self.config['font_val']}\n")
+                f.write(f"font_small={self.config['font_small']}\n\n[Update]\n")
+                f.write(f"update_metrics={self.config['update_metrics']}\n")
+                f.write(f"update_overlay={self.config['update_overlay']}\n")
+        except OSError as e:
+            messagebox.showerror("Error", f"Could not save {CONFIG_FILE}:\n{e}")
+            return
+
         messagebox.showinfo("Success", "Settings saved!\nRestart overlay to apply changes.")
     
     def preview(self):
@@ -230,10 +240,14 @@ class OverlaySettings:
     def reset_config(self):
         if messagebox.askyesno("Reset", "Reset all settings to default?"):
             self.config = DEFAULT_CONFIG.copy()
+            # Rebuild the widgets in place rather than tearing down and
+            # recreating the Tk root - creating a second Tk() instance
+            # while the first one's mainloop is still on the call stack
+            # is unreliable and can leave the app in a broken state.
+            for widget in self.root.winfo_children():
+                widget.destroy()
+            self.create_widgets()
             messagebox.showinfo("Reset", "Settings reset to default.")
-            self.root.destroy()
-            self.__init__()
-            self.run()
     
     def run(self):
         self.root.mainloop()
