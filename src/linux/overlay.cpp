@@ -122,30 +122,41 @@ static void LoadConfig() {
             val.erase(0, val.find_first_not_of(" \t\r\n"));
             val.erase(val.find_last_not_of(" \t\r\n") + 1);
             
-            if (key == "width") g_config.width = std::stoi(val);
-            else if (key == "height") g_config.height = std::stoi(val);
-            else if (key == "alpha") g_config.alpha = std::stof(val);
-            else if (key == "margin") g_config.margin = std::stoi(val);
-            else if (key == "corner") g_config.corner = val;
-            else if (key == "background") sscanf(val.c_str(), "%d,%d,%d", &g_config.bg_r, &g_config.bg_g, &g_config.bg_b);
-            else if (key == "fps_ok") sscanf(val.c_str(), "%d,%d,%d", &g_config.fps_ok_r, &g_config.fps_ok_g, &g_config.fps_ok_b);
-            else if (key == "fps_warn") sscanf(val.c_str(), "%d,%d,%d", &g_config.fps_warn_r, &g_config.fps_warn_g, &g_config.fps_warn_b);
-            else if (key == "fps_crit") sscanf(val.c_str(), "%d,%d,%d", &g_config.fps_crit_r, &g_config.fps_crit_g, &g_config.fps_crit_b);
-            else if (key == "text_dim") sscanf(val.c_str(), "%d,%d,%d", &g_config.text_dim_r, &g_config.text_dim_g, &g_config.text_dim_b);
-            else if (key == "separator") sscanf(val.c_str(), "%d,%d,%d", &g_config.sep_r, &g_config.sep_g, &g_config.sep_b);
-            else if (key == "show_fps") g_config.show_fps = (val == "true" || val == "1");
-            else if (key == "show_cpu") g_config.show_cpu = (val == "true" || val == "1");
-            else if (key == "show_gpu") g_config.show_gpu = (val == "true" || val == "1");
-            else if (key == "show_title") g_config.show_title = (val == "true" || val == "1");
-            else if (key == "font_fps") g_config.font_fps = std::stoi(val);
-            else if (key == "font_val") g_config.font_val = std::stoi(val);
-            else if (key == "font_small") g_config.font_small = std::stoi(val);
-            else if (key == "update_metrics") g_config.update_metrics = std::stoi(val);
-            else if (key == "update_overlay") g_config.update_overlay = std::stoi(val);
+            try {
+                if (key == "width") g_config.width = std::stoi(val);
+                else if (key == "height") g_config.height = std::stoi(val);
+                else if (key == "alpha") g_config.alpha = std::stof(val);
+                else if (key == "margin") g_config.margin = std::stoi(val);
+                else if (key == "corner") g_config.corner = val;
+                else if (key == "background") sscanf(val.c_str(), "%d,%d,%d", &g_config.bg_r, &g_config.bg_g, &g_config.bg_b);
+                else if (key == "fps_ok") sscanf(val.c_str(), "%d,%d,%d", &g_config.fps_ok_r, &g_config.fps_ok_g, &g_config.fps_ok_b);
+                else if (key == "fps_warn") sscanf(val.c_str(), "%d,%d,%d", &g_config.fps_warn_r, &g_config.fps_warn_g, &g_config.fps_warn_b);
+                else if (key == "fps_crit") sscanf(val.c_str(), "%d,%d,%d", &g_config.fps_crit_r, &g_config.fps_crit_g, &g_config.fps_crit_b);
+                else if (key == "text_dim") sscanf(val.c_str(), "%d,%d,%d", &g_config.text_dim_r, &g_config.text_dim_g, &g_config.text_dim_b);
+                else if (key == "separator") sscanf(val.c_str(), "%d,%d,%d", &g_config.sep_r, &g_config.sep_g, &g_config.sep_b);
+                else if (key == "show_fps") g_config.show_fps = (val == "true" || val == "1");
+                else if (key == "show_cpu") g_config.show_cpu = (val == "true" || val == "1");
+                else if (key == "show_gpu") g_config.show_gpu = (val == "true" || val == "1");
+                else if (key == "show_title") g_config.show_title = (val == "true" || val == "1");
+                else if (key == "font_fps") g_config.font_fps = std::stoi(val);
+                else if (key == "font_val") g_config.font_val = std::stoi(val);
+                else if (key == "font_small") g_config.font_small = std::stoi(val);
+                else if (key == "update_metrics") g_config.update_metrics = std::stoi(val);
+                else if (key == "update_overlay") g_config.update_overlay = std::stoi(val);
+            } catch (...) {
+                // Malformed line in overlay.ini - skip it and keep the current/default value
+                continue;
+            }
         }
         file.close();
     }
     
+    // Clamp to sane ranges so a bad overlay.ini can't produce a
+    // degenerate/invisible window
+    g_config.width = std::max(100, std::min(g_config.width, 2000));
+    g_config.height = std::max(60, std::min(g_config.height, 2000));
+    g_config.alpha = std::max(0.05f, std::min(g_config.alpha, 1.0f));
+
     WIN_W = g_config.width;
     WIN_H = g_config.height;
     ALPHA_F = g_config.alpha;
@@ -234,59 +245,81 @@ static float GetCpuUsage() {
 }
 
 // GPU USAGE -------------------------------------------------------------
+// Looks for an AMD/Intel GPU exposing gpu_busy_percent under /sys/class/drm.
+// (NVIDIA's proprietary driver does not expose this file - that case is
+// handled separately via nvidia-smi in GetGpuUsage below.)
 static std::string FindGpuPath() {
-    // NVIDIA
     DIR* dir = opendir("/sys/class/drm");
     if (dir) {
         struct dirent* entry;
         while ((entry = readdir(dir))) {
-            if (strstr(entry->d_name, "card") && strstr(entry->d_name, "NV")) {
-                std::string path = "/sys/class/drm/" + std::string(entry->d_name);
+            std::string name(entry->d_name);
+            // Only look at plain "cardN" entries, not "cardN-<connector>"
+            if (name.rfind("card", 0) != 0) continue;
+            if (name.find('-') != std::string::npos) continue;
+
+            std::string path = "/sys/class/drm/" + name;
+            if (access((path + "/device/gpu_busy_percent").c_str(), F_OK) == 0) {
                 closedir(dir);
                 return path;
             }
         }
         closedir(dir);
     }
-    
-    // AMD GPU
-    if (access("/sys/class/drm/card0/device/gpu_busy_percent", F_OK) == 0) {
-        return "/sys/class/drm/card0";
-    }
-    
     return "";
+}
+
+static bool HasNvidiaSmi() {
+    static int cached = -1; // -1 = unknown, 0 = no, 1 = yes
+    if (cached == -1) {
+        FILE* pipe = popen("command -v nvidia-smi 2>/dev/null", "r");
+        cached = 0;
+        if (pipe) {
+            char buffer[8];
+            if (fgets(buffer, sizeof(buffer), pipe)) cached = 1;
+            pclose(pipe);
+        }
+    }
+    return cached == 1;
 }
 
 static float GetGpuUsage() {
     static std::string gpuPath = FindGpuPath();
-    if (gpuPath.empty()) return 0;
-    
-    // AMD GPU
-    std::ifstream file(gpuPath + "/device/gpu_busy_percent");
-    if (file.is_open()) {
-        int usage;
-        file >> usage;
-        file.close();
-        return static_cast<float>(usage);
-    }
-    
-    // NVIDIA (через nvidia-smi как fallback)
-    FILE* pipe = popen("nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null", "r");
-    if (pipe) {
-        char buffer[128];
-        if (fgets(buffer, sizeof(buffer), pipe)) {
-            pclose(pipe);
-            return std::stof(buffer);
+
+    // AMD/Intel GPU via sysfs
+    if (!gpuPath.empty()) {
+        std::ifstream file(gpuPath + "/device/gpu_busy_percent");
+        if (file.is_open()) {
+            int usage = 0;
+            if (file >> usage) return static_cast<float>(usage);
         }
-        pclose(pipe);
     }
-    
+
+    // NVIDIA fallback via nvidia-smi (checked independently of gpuPath,
+    // since NVIDIA cards never expose gpu_busy_percent under sysfs)
+    if (HasNvidiaSmi()) {
+        FILE* pipe = popen("nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null", "r");
+        if (pipe) {
+            char buffer[128];
+            char* got = fgets(buffer, sizeof(buffer), pipe);
+            pclose(pipe);
+            if (got) {
+                try {
+                    return std::stof(buffer);
+                } catch (...) {
+                    return 0;
+                }
+            }
+        }
+    }
+
     return 0;
 }
 
 // FPS DETECTION ---------------------------------------------------------
+// Approximates FPS using the active monitor's refresh rate reported by
+// XRandR. This is a simple estimate, not a true per-frame measurement.
 static int GetFps() {
-    // Определяем через частоту обновления X11
     static int lastFps = 60;
     static auto lastUpdate = std::chrono::steady_clock::now();
     
@@ -294,21 +327,23 @@ static int GetFps() {
     double dt = std::chrono::duration<double>(now - lastUpdate).count();
     
     if (dt >= 0.5) {
-        // Получаем частоту обновления через XRandR (простая реализация)
         FILE* pipe = popen("xrandr --query 2>/dev/null | grep '*' | awk '{print $2}' | cut -d'.' -f1 | head -1", "r");
         if (pipe) {
             char buffer[32];
             if (fgets(buffer, sizeof(buffer), pipe)) {
-                int refresh = std::stoi(buffer);
-                if (refresh > 0 && refresh < 500) {
-                    lastFps = static_cast<int>(lastFps * 0.7 + refresh * 0.3);
+                try {
+                    int refresh = std::stoi(buffer);
+                    if (refresh > 0 && refresh < 500) {
+                        lastFps = static_cast<int>(lastFps * 0.7 + refresh * 0.3);
+                    }
+                } catch (...) {
+                    // xrandr output wasn't a number (e.g. no display server
+                    // info available) - keep the previous FPS estimate
                 }
             }
             pclose(pipe);
         }
         
-        // DWM-like detection через XPresent (если доступен)
-        // Для простоты используем значение xrandr
         lastUpdate = now;
     }
     
@@ -427,7 +462,7 @@ int main() {
     
     // Create window
     XSetWindowAttributes attrs;
-    attrs.override_redirect = True;  // Без рамок
+    attrs.override_redirect = True;  // Borderless, unmanaged by the WM
     attrs.background_pixel = BG;
     attrs.event_mask = ExposureMask | ButtonPressMask | ButtonReleaseMask | 
                        ButtonMotionMask | PointerMotionMask | KeyPressMask;
@@ -469,6 +504,11 @@ int main() {
     // Show window
     XMapWindow(g_display, g_window);
     MoveToCorner(CORNER);
+
+    // Override-redirect windows are not managed by the WM and don't get
+    // keyboard focus automatically, so KeyPress (Escape-to-close) would
+    // otherwise never fire. Grab focus explicitly.
+    XSetInputFocus(g_display, g_window, RevertToParent, CurrentTime);
     
     // Start collector thread
     std::thread collector(CollectorThread);
@@ -510,8 +550,6 @@ int main() {
                     
                 case MotionNotify:
                     if (dragging) {
-                        int dx = ev.xmotion.x - drag_start_x;
-                        int dy = ev.xmotion.y - drag_start_y;
                         Window root_ret, child_ret;
                         int root_x, root_y, win_x, win_y;
                         unsigned int mask;
