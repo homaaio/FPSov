@@ -24,3 +24,5 @@ Makefile text eol=lf
 
 *.zip binary -diff
 *.tar.gz binary -diff
+
+scripts/** linguist-vendored
